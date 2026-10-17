@@ -15,7 +15,22 @@ services:
       - path: /lib/*
         name: Cache-Control
         value: public, max-age=604800
-      # The service worker must always be re-checked so app updates reach installed copies.
+      # The page, its code and the service worker are always re-checked so updates show up on the next visit.
+      - path: /
+        name: Cache-Control
+        value: no-cache
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      - path: /app.js
+        name: Cache-Control
+        value: no-cache
+      - path: /render.js
+        name: Cache-Control
+        value: no-cache
+      - path: /styles.css
+        name: Cache-Control
+        value: no-cache
       - path: /sw.js
         name: Cache-Control
         value: no-cache
