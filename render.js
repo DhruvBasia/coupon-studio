@@ -296,15 +296,71 @@
     return { pw, ph, cols, rows, cw, ch, gap: g, x0, y0, gw, gh, perPage, count, pages, valid };
   }
 
-  /** Coupon index (0-based) printed in a cell, or -1 when the cell stays blank. */
-  function cellNumber(S, G, page, cell) {
-    const n = S.num.order === 'stack' ? cell * G.pages + page : page * G.perPage + cell;
-    return n < G.count ? n : -1;
+  /* ------------------------------------------------------------------ coupon types & page plan
+   * A "job" is one kind of coupon (e.g. Breakfast) with its own settings and count. Without coupon types there is
+   * a single job made from the main design. The plan lists, for every page, which job and number sits in each cell. */
+
+  function jobsFor(S) {
+    const B = S.batch;
+    if (!B || !B.enabled || !Array.isArray(B.items) || !B.items.length) {
+      return [{ S, count: Math.max(0, Math.round(+S.num.count || 0)) }];
+    }
+    return B.items.map((it) => {
+      const s = Object.assign({}, S, {
+        text: Object.assign({}, S.text, { title: it.title || S.text.title }),
+        colors: Object.assign({}, S.colors, { primary: it.color || S.colors.primary }),
+        num: Object.assign({}, S.num, { prefix: it.prefix, start: +it.start || 0, count: +it.count || 0 }),
+        date: it.date ? Object.assign({}, S.date, { start: it.date, custom: false, range: false }) : S.date,
+      });
+      return { S: s, count: Math.max(0, Math.round(+it.count || 0)) };
+    }).filter((j) => j.count > 0);
+  }
+
+  function makePlan(S) {
+    const G = computeGrid(S);
+    const jobs = jobsFor(S);
+    const offsets = [];
+    let total = 0;
+    for (const j of jobs) { offsets.push(total); total += j.count; }
+    const pages = [];
+    const per = G.perPage;
+    if (G.valid && per > 0) {
+      const separate = jobs.length === 1 || !(S.batch && S.batch.newPage === false);
+      if (separate) {
+        jobs.forEach((job, j) => {
+          const np = Math.ceil(job.count / per);
+          for (let p = 0; p < np; p++) {
+            const cells = new Array(per).fill(null);
+            for (let c = 0; c < per; c++) {
+              const n = S.num.order === 'stack' ? c * np + p : p * per + c;
+              if (n < job.count) cells[c] = { j, n };
+            }
+            pages.push(cells);
+          }
+        });
+      } else {
+        // Types share pages to save paper: coupons simply follow each other.
+        let cells = null, c = 0;
+        jobs.forEach((job, j) => {
+          for (let n = 0; n < job.count; n++) {
+            if (!cells || c === per) { cells = new Array(per).fill(null); pages.push(cells); c = 0; }
+            cells[c++] = { j, n };
+          }
+        });
+      }
+    }
+    return { G, jobs, offsets, total, pages };
+  }
+
+  /** Finds the job and number of the coupon at position `i` when all coupons are listed type by type. */
+  function locate(plan, i) {
+    for (let j = plan.jobs.length - 1; j >= 0; j--) if (i >= plan.offsets[j]) return { j, n: i - plan.offsets[j] };
+    return { j: 0, n: 0 };
   }
 
   /* ------------------------------------------------------------------ coupon layout */
 
-  function computeLayout(S, w, h, logo, G) {
+  function computeLayout(S, w, h, logo, count) {
     const s = Math.min(w / BASE_W, h / BASE_H);
     const st = S.style;
     const L = { w, h, s, S };
@@ -320,7 +376,7 @@
     // Build the vertical stack; shrink everything if it does not fit.
     let f = 1, items, unit, extraTop = 0;
     for (let iter = 0; iter < 10; iter++) {
-      items = buildItems(S, s * f, box, G);
+      items = buildItems(S, s * f, box, count);
       const total = items.reduce((a, it) => a + it.h, 0);
       const gapUnits = items.reduce((a, it) => a + it.gap, 0) + 0.7;
       unit = (box.h - total) / gapUnits;
@@ -368,7 +424,7 @@
       w: textWidth(str, font, size, track * size) };
   }
 
-  function buildItems(S, u, box, G) {
+  function buildItems(S, u, box, count) {
     const T = S.text, F = S.fonts, Z = S.sizes, C = S.colors, sh = S.show, st = S.style;
     const items = [];
     const has = (v) => typeof v === 'string' && v.trim() !== '';
@@ -394,7 +450,7 @@
     if (sh.extra && has(T.extra)) {
       items.push(textItem(T.extra, F.body, 4.6 * PT * u * Z.extra / 100, 0.02, C.muted, 0.6, box.w));
     }
-    if (sh.ribbon) items.push(ribbonItem(S, u, box, G));
+    if (sh.ribbon) items.push(ribbonItem(S, u, box, count));
     if (sh.authorized && has(T.authorized)) {
       const it = textItem(T.authorized, F.body, 4.7 * PT * u * Z.authorized / 100, 0.12, C.muted, 0.95, box.w);
       it.type = 'auth';
@@ -406,13 +462,13 @@
     return items;
   }
 
-  function ribbonItem(S, u, box, G) {
+  function ribbonItem(S, u, box, count) {
     const T = S.text, F = S.fonts, st = S.style;
     const label = (T.numberLabel || '').trim();
     const style = st.ribbon;
 
     // Width of the widest possible coupon number, so every ribbon on the sheet is identical.
-    const last = numberText(S, Math.max(0, (G ? G.count : 1) - 1));
+    const last = numberText(S, Math.max(0, (count || 1) - 1));
     const first = numberText(S, 0);
     let maxDigit = 0;
     for (const dch of '0123456789') maxDigit = Math.max(maxDigit, adv(F.number, dch));
@@ -598,39 +654,51 @@
 
   /* ------------------------------------------------------------------ pages */
 
-  function renderPage(p, S, G, L, logo, page, background) {
+  /** One layout per coupon type (its title, colour and number width differ). `logos[j]` is that type's logo. */
+  function layoutsFor(plan, logos) {
+    const G = plan.G;
+    return plan.jobs.map((job, j) => computeLayout(job.S, G.cw, G.ch, logos[j], job.count));
+  }
+
+  function renderPage(p, S, plan, layouts, logos, page, background) {
+    const G = plan.G;
     if (background) p.rect(0, 0, G.pw, G.ph, { fill: '#ffffff' });
     if (!G.valid) return;
     drawCutLines(p, S, G);
+    const cells = plan.pages[page];
+    if (!cells) return;
     for (let r = 0; r < G.rows; r++) {
       for (let c = 0; c < G.cols; c++) {
-        const n = cellNumber(S, G, page, r * G.cols + c);
-        if (n < 0) continue;
-        drawCoupon(p, G.x0 + c * (G.cw + G.gap), G.y0 + r * (G.ch + G.gap), L, numberText(S, n), logo);
+        const d = cells[r * G.cols + c];
+        if (!d) continue;
+        drawCoupon(p, G.x0 + c * (G.cw + G.gap), G.y0 + r * (G.ch + G.gap), layouts[d.j], numberText(plan.jobs[d.j].S, d.n), logos[d.j]);
       }
     }
   }
 
   /** Draws one page of the sheet into a canvas at `k` px per mm. */
-  function drawSheet(canvas, S, logo, page, k) {
-    const G = computeGrid(S);
+  function drawSheet(canvas, S, logos, page, k) {
+    const plan = makePlan(S);
     const ctx = canvas.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const L = G.valid ? computeLayout(S, G.cw, G.ch, logo, G) : null;
-    renderPage(new CanvasPainter(ctx, k), S, G, L, logo, page, true);
-    return G;
+    const layouts = plan.G.valid ? layoutsFor(plan, logos) : [];
+    renderPage(new CanvasPainter(ctx, k), S, plan, layouts, logos, page, true);
+    return plan;
   }
 
-  /** Draws a single coupon (with its cut lines) filling the canvas; `margin` is in mm. */
-  function drawSingle(canvas, S, logo, n, k, margin) {
-    const G = computeGrid(S);
+  /** Draws coupon number `i` (counting through all types) with its cut lines, filling the canvas; `margin` in mm. */
+  function drawSingle(canvas, S, logos, i, k, margin) {
+    const plan = makePlan(S);
+    const G = plan.G;
     const ctx = canvas.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!G.valid) return G;
+    if (!G.valid || !plan.total) return plan;
+    const { j, n } = locate(plan, i);
+    const job = plan.jobs[j], logo = logos[j];
     const p = new CanvasPainter(ctx, k);
-    const L = computeLayout(S, G.cw, G.ch, logo, G);
+    const L = computeLayout(job.S, G.cw, G.ch, logo, job.count);
     p.rect(0, 0, G.cw + 2 * margin, G.ch + 2 * margin, { fill: '#ffffff' });
     if (S.page.cut !== 'none') {
       const o = { stroke: S.page.cutColor, lw: Math.max(0.05, +S.page.cutWidth || 0.2), dash: S.page.cutStyle === 'dashed' ? [1.2, 0.9] : S.page.cutStyle === 'dotted' ? [0.25, 0.75] : null };
@@ -638,8 +706,8 @@
       p.line(x1, 0, x1, y2 + margin, o); p.line(x2, 0, x2, y2 + margin, o);
       p.line(0, y1, x2 + margin, y1, o); p.line(0, y2, x2 + margin, y2, o);
     }
-    drawCoupon(p, margin, margin, L, numberText(S, n), logo);
-    return G;
+    drawCoupon(p, margin, margin, L, numberText(job.S, n), logo);
+    return plan;
   }
 
   /* ------------------------------------------------------------------ PDF export */
@@ -653,12 +721,13 @@
     });
   }
 
-  async function buildPdf(S, logo, onProgress) {
+  async function buildPdf(S, logos, onProgress) {
     await loadFonts();
     const { jsPDF } = global.jspdf;
-    const G = computeGrid(S);
+    const plan = makePlan(S);
+    const G = plan.G;
     if (!G.valid) throw new Error('The page layout does not fit any coupons. Check the rows, columns and margins.');
-    if (G.count < 1) throw new Error('Set the number of coupons to at least 1.');
+    if (plan.total < 1) throw new Error('Set the number of coupons to at least 1.');
     const orientation = G.pw > G.ph ? 'landscape' : 'portrait';
     const doc = new jsPDF({ orientation, unit: 'mm', format: [G.pw, G.ph], compress: true });
 
@@ -670,20 +739,22 @@
     doc.setLineCap('butt');
     doc.setLineJoin('miter');
 
-    const L = computeLayout(S, G.cw, G.ch, logo, G);
+    const layouts = layoutsFor(plan, logos);
     const painter = new PdfPainter(doc);
+    const pages = plan.pages.length;
     let lastYield = performance.now();
-    for (let page = 0; page < G.pages; page++) {
+    for (let page = 0; page < pages; page++) {
       if (page > 0) doc.addPage([G.pw, G.ph], orientation);
-      renderPage(painter, S, G, L, logo, page, false);
-      if (performance.now() - lastYield > 60 || page === G.pages - 1) {
-        if (onProgress) onProgress(page + 1, G.pages);
+      renderPage(painter, S, plan, layouts, logos, page, false);
+      if (performance.now() - lastYield > 60 || page === pages - 1) {
+        if (onProgress) onProgress(page + 1, pages);
         await yieldToBrowser();
         lastYield = performance.now();
       }
     }
+    const titles = [...new Set(plan.jobs.map((job) => job.S.text.title).filter(Boolean))];
     doc.setProperties({
-      title: [S.text.heading, S.text.title, 'Coupons'].filter(Boolean).join(' – '),
+      title: [S.text.heading, titles.join(', '), 'Coupons'].filter(Boolean).join(' – '),
       creator: 'Coupon Studio',
     });
     return doc;
@@ -691,6 +762,6 @@
 
   global.CouponRender = {
     FONTS, PAPERS, PT, loadFonts, computeGrid, computeLayout, drawSheet, drawSingle, buildPdf,
-    numberText, dateText, formatDate, mix, rgb, cellNumber,
+    numberText, dateText, formatDate, mix, rgb, jobsFor, makePlan, locate,
   };
 })(window);

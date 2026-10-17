@@ -14,7 +14,9 @@ Design numbered event coupons (refreshment, lunch, high tea, entry passes…) an
 - **Logo watermark** – upload or drag in any image; opacity, size, position, grayscale / tint, automatic white-background removal.
 - **Colours & style** – 12 themes or custom colours, border and ribbon styles, fonts and per-element text size.
 - **Paper & cutting** – A4 / A3 / A5 / Letter / Legal, portrait or landscape, columns × rows or an exact coupon size in mm, margins, gaps, and cutting lines (full page, around coupons, or crop marks) with scissors marks.
+- **Several coupon types in one PDF** – e.g. breakfast, lunch and dinner for each day of an event. Each type has its own date, colour, prefix, start number and count; one click adds a whole day of meals. Types can start on a new page each, or share pages to save paper.
 - **Saved designs** – keep several designs in the browser, or export / import a settings file.
+- **Install as an app** – use "Install app" in Chrome or Edge (or "Add to Home Screen" on a phone). The installed app opens in its own window and works fully offline.
 
 The on-screen preview and the PDF are drawn by the same layout code (`render.js`), so the PDF matches the preview exactly. Text and lines in the PDF are vector, and fonts are embedded.
 
@@ -36,4 +38,5 @@ It is a static site with no build step and no server code:
 | `render.js` | Coupon layout and drawing (canvas preview + jsPDF export) |
 | `assets/fonts.js` | Embedded Google Fonts (SIL Open Font License) |
 | `lib/jspdf.umd.min.js` | [jsPDF](https://github.com/parallax/jsPDF) 2.5.2 (MIT) |
+| `manifest.webmanifest`, `sw.js`, `icon-*.png` | Installable app and offline cache (bump `VERSION` in `sw.js` when adding files) |
 | `build-artifact.py` | Bundles everything into one HTML file (`dist/`) for hosting as a single page |

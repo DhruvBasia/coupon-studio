@@ -15,3 +15,10 @@ services:
       - path: /lib/*
         name: Cache-Control
         value: public, max-age=604800
+      # The service worker must always be re-checked so app updates reach installed copies.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /manifest.webmanifest
+        name: Content-Type
+        value: application/manifest+json
