@@ -1,0 +1,5 @@
+# single-file artifact bundle (regenerate with: python build-artifact.py)
+dist/
+__pycache__/
+.DS_Store
+Thumbs.db

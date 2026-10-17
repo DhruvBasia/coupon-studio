@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coupon Studio</title>
+  <meta name="claude:viewport-fit-sides" content="cover">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="theme-color" content="#3b47c9">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <script>
+    // Apply the saved theme before anything paints (light unless the viewer picked dark).
+    (function () {
+      var t = 'light';
+      try { t = localStorage.getItem('couponStudio.theme') === 'dark' ? 'dark' : 'light'; } catch (e) { /* storage blocked */ }
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="7" width="26" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 7v18" stroke="currentColor" stroke-width="2" stroke-dasharray="2.5 2.5"/><circle cx="11.5" cy="16" r="3" fill="currentColor"/></svg>
+      <div>
+        <h1>Coupon Studio</h1>
+        <p id="summary">Loading…</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="btn ghost theme-toggle" id="btnTheme" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">
+        <svg class="ico-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <button class="btn ghost" id="btnPreviewPdf" type="button" title="Build the PDF and preview / print it here">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M7 14h10v7H7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        Preview &amp; print
+      </button>
+      <button class="btn primary" id="btnDownload" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download PDF
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============================================================ EDITOR -->
+    <aside class="editor" id="editor">
+
+      <details class="panel" open>
+        <summary>Coupon text</summary>
+        <div class="panel-body">
+          <div class="field">
+            <div class="field-head"><span>Event heading</span><label class="switch"><input type="checkbox" data-bind="show.heading"><i></i></label></div>
+            <input type="text" data-bind="text.heading" placeholder="e.g. ANNUAL TECH FEST 2026">
+          </div>
+          <div class="field">
+            <div class="field-head"><span>Coupon type</span><label class="switch"><input type="checkbox" data-bind="show.title"><i></i></label></div>
+            <input type="text" data-bind="text.title" placeholder="e.g. REFRESHMENT">
+            <div class="chips" id="typeChips"></div>
+          </div>
+          <div class="field">
+            <div class="field-head"><span>Extra line <em>(venue, time, note…)</em></span><label class="switch"><input type="checkbox" data-bind="show.extra"><i></i></label></div>
+            <input type="text" data-bind="text.extra" placeholder="e.g. Venue: Main Auditorium · 11:00 AM">
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <div class="field-head"><span>Number label</span><label class="switch"><input type="checkbox" data-bind="show.ribbon"><i></i></label></div>
+              <input type="text" data-bind="text.numberLabel" placeholder="COUPON NO.">
+            </div>
+            <div class="field">
+              <div class="field-head"><span>Signature text</span><label class="switch"><input type="checkbox" data-bind="show.authorized"><i></i></label></div>
+              <input type="text" data-bind="text.authorized" placeholder="AUTHORIZED">
+            </div>
+          </div>
+          <div class="toggles">
+            <label class="check"><input type="checkbox" data-bind="show.divider"> Gold divider under heading</label>
+            <label class="check"><input type="checkbox" data-bind="show.signLine"> Signature line</label>
+          </div>
+        </div>
+      </details>
+
+      <details class="panel" open>
+        <summary>Date</summary>
+        <div class="panel-body">
+          <div class="field-head"><span>Show date on coupon</span><label class="switch"><input type="checkbox" data-bind="show.date"><i></i></label></div>
+          <div class="grid2">
+            <label class="field"><span>Label</span><input type="text" data-bind="text.dateLabel" placeholder="Date :"></label>
+            <label class="field" data-show-if="!date.custom"><span>Format</span><select data-bind="date.format" id="dateFormat"></select></label>
+          </div>
+          <div data-show-if="!date.custom">
+            <div class="grid2">
+              <label class="field"><span id="startDateLabel">Date</span><input type="date" data-bind="date.start"></label>
+              <label class="field" data-show-if="date.range"><span>End date</span><input type="date" data-bind="date.end"></label>
+            </div>
+            <label class="check"><input type="checkbox" data-bind="date.range"> It's a date range (e.g. 14.11.2026 – 16.11.2026)</label>
+          </div>
+          <label class="check"><input type="checkbox" data-bind="date.custom"> Type the date text myself</label>
+          <label class="field" data-show-if="date.custom"><span>Date text</span><input type="text" data-bind="date.customText" placeholder="e.g. 9th – 11th September 2026"></label>
+        </div>
+      </details>
+
+      <details class="panel" open>
+        <summary>Numbering</summary>
+        <div class="panel-body">
+          <div class="grid3">
+            <label class="field"><span>Prefix</span><input type="text" data-bind="num.prefix" placeholder="EVT"></label>
+            <label class="field"><span>Separator</span><input type="text" data-bind="num.sep" placeholder="-" maxlength="3"></label>
+            <label class="field"><span>Suffix</span><input type="text" data-bind="num.suffix" placeholder="optional"></label>
+          </div>
+          <div class="grid3">
+            <label class="field"><span>Number format</span>
+              <select data-bind="num.digits" data-type="number">
+                <option value="1">1, 2, 3</option>
+                <option value="2">01, 02, 03</option>
+                <option value="3">001, 002</option>
+                <option value="4">0001</option>
+                <option value="5">00001</option>
+              </select>
+            </label>
+            <label class="field"><span>Start at</span><input type="number" min="0" step="1" data-bind="num.start"></label>
+            <label class="field"><span>How many</span><input type="number" min="1" max="20000" step="1" data-bind="num.count"></label>
+          </div>
+          <label class="field"><span>Numbering order</span>
+            <select data-bind="num.order">
+              <option value="page">Page by page (1, 2, 3 … across each sheet)</option>
+              <option value="stack">Stack cut (cut the whole printed stack at once, numbers stay in order)</option>
+            </select>
+          </label>
+          <div class="note" id="numSummary"></div>
+        </div>
+      </details>
+
+      <details class="panel" open>
+        <summary>Logo watermark</summary>
+        <div class="panel-body">
+          <div class="field-head"><span>Show logo behind the text</span><label class="switch"><input type="checkbox" data-bind="show.logo"><i></i></label></div>
+          <div class="logo-row">
+            <div class="logo-thumb" id="logoThumb" title="Processed logo as it is printed"><canvas id="logoThumbCanvas"></canvas></div>
+            <div class="logo-actions">
+              <label class="btn small" for="logoFile">Upload new logo</label>
+              <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" hidden>
+              <button class="btn small ghost" id="btnLogoReset" type="button">Remove logo</button>
+              <span class="tiny" id="logoName"></span>
+            </div>
+          </div>
+          <div class="drop-hint" id="dropZone">…or drop an image file here</div>
+          <label class="field"><span>Opacity <output data-for="logo.opacity" data-unit="%"></output></span><input type="range" min="0" max="100" step="1" data-bind="logo.opacity"></label>
+          <label class="field"><span>Size <output data-for="logo.size" data-unit="% of width"></output></span><input type="range" min="10" max="100" step="1" data-bind="logo.size"></label>
+          <div class="grid2">
+            <label class="field"><span>Move left / right <output data-for="logo.offsetX" data-unit="%"></output></span><input type="range" min="-50" max="50" step="1" data-bind="logo.offsetX"></label>
+            <label class="field"><span>Move up / down <output data-for="logo.offsetY" data-unit="%"></output></span><input type="range" min="-50" max="50" step="1" data-bind="logo.offsetY"></label>
+          </div>
+          <label class="field"><span>Logo colour</span>
+            <select data-bind="logo.mode">
+              <option value="original">Original colours</option>
+              <option value="grayscale">Grayscale</option>
+              <option value="tint">Tinted with the coupon colour</option>
+            </select>
+          </label>
+          <div class="toggles">
+            <label class="check"><input type="checkbox" data-bind="logo.removeWhite"> Make white background transparent</label>
+            <label class="check"><input type="checkbox" data-bind="logo.trim"> Trim empty space around the logo</label>
+          </div>
+        </div>
+      </details>
+
+      <details class="panel" open>
+        <summary>Colours &amp; style</summary>
+        <div class="panel-body">
+          <div class="swatches" id="themeSwatches"></div>
+          <div class="grid3 colors">
+            <label class="color"><input type="color" data-bind="colors.primary"><span>Main</span></label>
+            <label class="color"><input type="color" data-bind="colors.accent"><span>Divider</span></label>
+            <label class="color"><input type="color" data-bind="colors.paper"><span>Background</span></label>
+            <label class="color"><input type="color" data-bind="colors.text"><span>Date text</span></label>
+            <label class="color"><input type="color" data-bind="colors.muted"><span>Small text</span></label>
+          </div>
+          <div class="grid2">
+            <label class="field"><span>Border</span>
+              <select data-bind="style.border">
+                <option value="double">Solid + dashed inner</option>
+                <option value="solid">Solid</option>
+                <option value="dashed">Dashed</option>
+                <option value="none">No border</option>
+              </select>
+            </label>
+            <label class="field"><span>Number ribbon</span>
+              <select data-bind="style.ribbon">
+                <option value="arrow">Arrow</option>
+                <option value="banner">Banner (notched)</option>
+                <option value="pill">Rounded pill</option>
+                <option value="tag">Rectangle</option>
+              </select>
+            </label>
+            <label class="field"><span>Number box</span>
+              <select data-bind="style.chip">
+                <option value="tint">Light box</option>
+                <option value="white">White box</option>
+                <option value="none">No box</option>
+              </select>
+            </label>
+            <label class="field"><span>Ribbon position</span>
+              <select data-bind="style.ribbonAlign">
+                <option value="center">Centre</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+              </select>
+            </label>
+            <label class="field"><span>Signature position</span>
+              <select data-bind="style.authAlign">
+                <option value="right">Right</option>
+                <option value="center">Centre</option>
+                <option value="left">Left</option>
+              </select>
+            </label>
+            <label class="field"><span>Corner radius <output data-for="style.radius" data-unit=" mm"></output></span><input type="range" min="0" max="5" step="0.1" data-bind="style.radius"></label>
+          </div>
+          <label class="field"><span>Gap between cut line and coupon border <output data-for="style.inset" data-unit=" mm"></output></span><input type="range" min="0" max="5" step="0.1" data-bind="style.inset"></label>
+        </div>
+      </details>
+
+      <details class="panel">
+        <summary>Fonts &amp; text size</summary>
+        <div class="panel-body">
+          <div class="grid2">
+            <label class="field"><span>Heading font</span><select data-bind="fonts.heading" class="font-select"></select></label>
+            <label class="field"><span>Coupon type font</span><select data-bind="fonts.title" class="font-select"></select></label>
+            <label class="field"><span>Small text font</span><select data-bind="fonts.body" class="font-select"></select></label>
+            <label class="field"><span>Number &amp; date font</span><select data-bind="fonts.number" class="font-select"></select></label>
+          </div>
+          <label class="field"><span>Heading size <output data-for="sizes.heading" data-unit="%"></output></span><input type="range" min="50" max="160" step="1" data-bind="sizes.heading"></label>
+          <label class="field"><span>Coupon type size <output data-for="sizes.title" data-unit="%"></output></span><input type="range" min="50" max="180" step="1" data-bind="sizes.title"></label>
+          <label class="field"><span>Date size <output data-for="sizes.date" data-unit="%"></output></span><input type="range" min="50" max="160" step="1" data-bind="sizes.date"></label>
+          <label class="field"><span>Extra line size <output data-for="sizes.extra" data-unit="%"></output></span><input type="range" min="50" max="160" step="1" data-bind="sizes.extra"></label>
+          <label class="field"><span>Ribbon size <output data-for="sizes.ribbon" data-unit="%"></output></span><input type="range" min="50" max="160" step="1" data-bind="sizes.ribbon"></label>
+          <label class="field"><span>Signature size <output data-for="sizes.authorized" data-unit="%"></output></span><input type="range" min="50" max="160" step="1" data-bind="sizes.authorized"></label>
+          <p class="tiny">Text that is too long for the coupon shrinks automatically so it never crosses the border.</p>
+        </div>
+      </details>
+
+      <details class="panel" open>
+        <summary>Paper &amp; cutting</summary>
+        <div class="panel-body">
+          <div class="grid2">
+            <label class="field"><span>Paper</span>
+              <select data-bind="page.size">
+                <option value="A4">A4 (210 × 297 mm)</option>
+                <option value="A3">A3 (297 × 420 mm)</option>
+                <option value="A5">A5 (148 × 210 mm)</option>
+                <option value="Letter">Letter (8.5 × 11 in)</option>
+                <option value="Legal">Legal (8.5 × 14 in)</option>
+              </select>
+            </label>
+            <label class="field"><span>Orientation</span>
+              <select data-bind="page.orientation">
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </label>
+          </div>
+          <div class="segmented" role="radiogroup" aria-label="Layout mode">
+            <label><input type="radio" name="pmode" value="fit" data-bind="page.mode"><span>Columns × rows</span></label>
+            <label><input type="radio" name="pmode" value="fixed" data-bind="page.mode"><span>Exact coupon size</span></label>
+          </div>
+          <div class="grid2" data-show-if="page.mode=fit">
+            <label class="field"><span>Columns</span><input type="number" min="1" max="12" step="1" data-bind="page.cols"></label>
+            <label class="field"><span>Rows</span><input type="number" min="1" max="30" step="1" data-bind="page.rows"></label>
+          </div>
+          <div class="grid2" data-show-if="page.mode=fixed">
+            <label class="field"><span>Coupon width (mm)</span><input type="number" min="10" max="400" step="0.5" data-bind="page.width"></label>
+            <label class="field"><span>Coupon height (mm)</span><input type="number" min="6" max="400" step="0.5" data-bind="page.height"></label>
+          </div>
+          <div class="grid3">
+            <label class="field"><span>Side margin (mm)</span><input type="number" min="0" max="50" step="0.5" data-bind="page.marginX"></label>
+            <label class="field"><span>Top margin (mm)</span><input type="number" min="0" max="50" step="0.5" data-bind="page.marginY"></label>
+            <label class="field"><span>Gap (mm)</span><input type="number" min="0" max="30" step="0.5" data-bind="page.gap"></label>
+          </div>
+          <div class="grid2">
+            <label class="field"><span>Cutting lines</span>
+              <select data-bind="page.cut">
+                <option value="full">Across the whole page</option>
+                <option value="grid">Only around the coupons</option>
+                <option value="crop">Crop marks in the margin</option>
+                <option value="none">No lines</option>
+              </select>
+            </label>
+            <label class="field"><span>Line style</span>
+              <select data-bind="page.cutStyle">
+                <option value="dashed">Dashed</option>
+                <option value="dotted">Dotted</option>
+                <option value="solid">Solid</option>
+              </select>
+            </label>
+            <label class="field"><span>Line thickness <output data-for="page.cutWidth" data-unit=" mm"></output></span><input type="range" min="0.05" max="0.6" step="0.05" data-bind="page.cutWidth"></label>
+            <label class="color inline"><input type="color" data-bind="page.cutColor"><span>Line colour</span></label>
+          </div>
+          <label class="check"><input type="checkbox" data-bind="page.scissors"> Scissors marks at the ends of each cut line</label>
+          <div class="note" id="gridSummary"></div>
+        </div>
+      </details>
+
+      <details class="panel">
+        <summary>Saved designs</summary>
+        <div class="panel-body">
+          <div class="save-row">
+            <input type="text" id="designName" placeholder="Name this design, e.g. Tech Fest Lunch Day 2">
+            <button class="btn small" id="btnSaveDesign" type="button">Save</button>
+          </div>
+          <ul class="designs" id="designList"></ul>
+          <div class="btn-row">
+            <button class="btn small ghost" id="btnExport" type="button">Export settings file</button>
+            <label class="btn small ghost" for="importFile">Import settings file</label>
+            <input type="file" id="importFile" accept="application/json,.json" hidden>
+            <button class="btn small danger" id="btnReset" type="button">Reset everything</button>
+          </div>
+          <p class="tiny">Your current design is remembered automatically in this browser.</p>
+        </div>
+      </details>
+    </aside>
+
+    <!-- ============================================================ PREVIEW -->
+    <section class="preview">
+      <div class="toolbar">
+        <div class="segmented small" role="tablist">
+          <label><input type="radio" name="view" value="sheet" checked><span>Full sheet</span></label>
+          <label><input type="radio" name="view" value="single"><span>Single coupon</span></label>
+        </div>
+        <div class="pager">
+          <button class="icon" id="btnPrev" type="button" aria-label="Previous">‹</button>
+          <span id="pageInfo">Page 1 / 1</span>
+          <button class="icon" id="btnNext" type="button" aria-label="Next">›</button>
+        </div>
+        <div class="zoom">
+          <button class="icon" id="btnZoomOut" type="button" aria-label="Zoom out">−</button>
+          <button class="zoom-label" id="btnZoomFit" type="button" title="Fit to window">Fit</button>
+          <button class="icon" id="btnZoomIn" type="button" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+      <div class="stage" id="stage">
+        <div class="paper-wrap" id="paperWrap">
+          <canvas id="sheet"></canvas>
+        </div>
+      </div>
+      <div class="statusbar" id="statusbar"></div>
+    </section>
+  </main>
+
+  <!-- PDF preview -->
+  <div class="modal" id="pdfModal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong id="pdfTitle">PDF preview</strong>
+        <span class="tiny">For exact cutting, print at <b>100% / Actual size</b> (turn off “Fit to page”).</span>
+        <div class="spacer"></div>
+        <a class="btn small ghost" id="pdfOpenTab" target="_blank" rel="noopener">Open in new tab</a>
+        <a class="btn small primary" id="pdfDownload">Download</a>
+        <button class="icon" id="pdfClose" type="button" aria-label="Close">✕</button>
+      </div>
+      <iframe id="pdfFrame" title="PDF preview"></iframe>
+    </div>
+  </div>
+
+  <div class="overlay" id="confirmBox" hidden role="dialog" aria-modal="true" aria-labelledby="confirmText">
+    <div class="confirm-card">
+      <p id="confirmText"></p>
+      <div class="btn-row">
+        <button class="btn small ghost" id="confirmNo" type="button">Cancel</button>
+        <button class="btn small danger solid" id="confirmYes" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="busy" hidden>
+    <div class="busy-card">
+      <div class="spinner"></div>
+      <div id="busyText">Building PDF…</div>
+      <div class="bar"><i id="busyBar"></i></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script src="lib/jspdf.umd.min.js"></script>
+  <script src="assets/fonts.js"></script>
+  <script src="render.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
